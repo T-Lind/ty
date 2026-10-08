@@ -45,10 +45,12 @@ ty --demo                     # preview the UI; no model needed
 
 - **Compact activity:** one row per tool, with a result marker and elapsed time.
 - **Readable answers:** headings, bold/italic text, lists, quotes, and code blocks get lightweight terminal formatting. Markdown links are clickable in terminals that support OSC 8; plain terminals display the URL.
-- **Progress that stays out of the way:** a spinner while the model reads context or tools run, then one short completion line.
-- **Hints when you want them:** command and argument completion with Tab, rotating input hints, and concise `/help`.
+- **Progress that stays out of the way:** a spinner while the model reads context or tools run, then one short completion line. Updates repaint only changed lines; synchronized terminal output avoids blank frames when supported.
+- **Hints when you want them:** type `/` for suggestions with descriptions. Arrow keys select, Tab completes, and Enter chooses. Rotating input hints and concise `/help` remain optional.
 - **Details on demand:** `/last` opens a tool result; `/ui verbose` expands previews and timing.
 - **Plain output:** redirected answers retain Markdown. Activity goes to stderr. `NO_COLOR` and `--color no` disable colors.
+
+`/mode` opens an installed-model picker with parameter count, quantization, disk size, and the current selection. Use arrow keys and Enter to choose, type to filter, or Escape to go back. `/model` opens the same picker; `/model 0.8b` switches directly. Permission settings use `/approve`.
 
 The UI stays in your terminal scrollback; there is no alternate screen. `--show-thinking` exposes the model's thinking preview, which is hidden by default.
 
@@ -60,7 +62,9 @@ On Linux/macOS interactive terminals, an input composer remains available during
 | --- | --- |
 | **Enter** | Queue your text as steering for the next tool boundary |
 | **Escape once** | Cancel the current work and run your draft, or the most recently submitted steering |
-| **Ctrl-C** or `/cancel` | Stop the task and keep an unsubmitted draft |
+| **Ctrl-C**, `/exit`, or `/quit` | Stop active work, save the session, and exit ty |
+| **Ctrl-X** | Stop work and keep your draft |
+| `/cancel` | Stop work and return to the prompt |
 | **Ctrl-J** or Alt-Enter | Add a line without submitting |
 | **Tab**, arrow keys, Home/End | Complete commands, edit text, and recall history |
 | **Ctrl-U**, **Ctrl-W** | Clear the draft or delete the preceding word |
@@ -74,7 +78,7 @@ Queued steering invalidates unexecuted calls from the old plan, then the model r
 
 Cancellation closes active HTTP sockets, including Ollama streams, and terminates shell process groups and their children. Completed file changes remain. Short local file operations finish at their next cancellation boundary. The shell tool does not take interactive stdin.
 
-Approvals use their own input field. `/steer your text` queues steering while an approval is open; Escape or Ctrl-C can stop it. Without a POSIX terminal, ty keeps the normal sequential REPL.
+Approvals use their own input field. `/steer your text` queues steering while an approval is open; Escape or Ctrl-X can stop it; Ctrl-C exits ty. Without a POSIX terminal, ty keeps the normal sequential REPL.
 
 Compaction shows elapsed time and the running approximate summary-token count, then reports the context estimate before and after. It does not display a percentage because the final summary length is unknown. Cancelling compaction preserves the original history.
 
@@ -107,13 +111,14 @@ Type `/help` for the essentials, or `/help all` for the full list.
 
 | Command | What it does |
 | --- | --- |
-| `/model 0.8b` / `/model 2b` | Switch models |
+| `/mode` or `/model` | Choose an installed model with arrow keys and Enter |
+| `/model 0.8b` / `/model 2b` | Switch models directly |
 | `/reason off` / `terse` / `full` | Control reasoning tokens |
 | `/tools code` / `web` / `core` / `all` | Choose the enabled tools |
 | `/approve manual` / `smart` / `readonly` / `yolo` | Change approvals |
 | `/ui calm` / `verbose`, `/hints on` / `off` | Adjust display density |
 | `/last [1..10]` | Inspect a tool result from this run; 1 is the latest |
-| `/status`, `/context`, `/stats` | Inspect settings, context estimates, and counters |
+| `/status`, `/context`, `/stats` | Inspect settings, context estimates, counters, and model timings |
 | `/threads auto` / `2` / `4` | Set inference threads |
 | `/new`, `/sessions`, `/resume <id or index>` | Manage sessions |
 | `/compact` | Summarize older turns when there are enough turns to compact |
@@ -122,9 +127,13 @@ Type `/help` for the essentials, or `/help all` for the full list.
 | `/init` | Create a `TY.md` file with project notes |
 | `/export [path]` | Export this session as Markdown |
 | `/unload` | Release the current model from RAM |
-| `/quit` | Exit; sessions save automatically |
+| `/exit` or `/quit` | Exit; sessions save automatically |
 
-Multiline clipboard pastes stay together on readline terminals with bracketed paste. `/paste` also works as an explicit fallback, preserving blank lines and indentation. Use Ctrl-C to interrupt and Ctrl-D to leave. A trailing `\` continues a line; fenced code can span multiple input lines. Undo covers file tools, including newly created files; it does not undo shell commands.
+Multiline clipboard pastes stay together on readline terminals with bracketed paste. `/paste` also works as an explicit fallback, preserving blank lines and indentation. Ctrl-C exits ty; Ctrl-X stops active work while preserving a draft. Ctrl-D exits with an empty draft. A trailing `\` continues a line; fenced code can span multiple input lines. Undo covers file tools, including newly created files; it does not undo shell commands.
+
+When resuming with `/resume`, `--resume`, or `--continue`, the saved model selection is restored and the conversation is printed in order, with multiline messages, Markdown formatting, and tool results. An explicit `--model` or `--fast` overrides the saved model on startup. Compaction keeps the original messages in a replay/export archive without sending the archive back to the model. Older sessions that already discarded messages can display their saved summary and remaining messages.
+
+`/stats` groups the last 100 recorded inference steps by model and shows generation rate, load time, prompt-processing time, and time to first model output. Samples stay inside the session file and are not included in the model context. These are real task timings with varying prompts, rather than a controlled model comparison. `/ui verbose` shows the same latency components per step.
 
 ## Focused web retrieval
 
@@ -179,6 +188,8 @@ ty --keep-alive 0 "one quick task"   # unload after model requests
 ty --doctor
 ```
 
+On this laptop, two-thread warm samples generated **11.9 tokens/s with 0.8B** and **7.2 tokens/s with 2B**. The first 560-token prompt took **18.3 seconds** and **42.9 seconds** to process respectively. Four threads slowed 0.8B and provided no clear benefit for 2B. These short benchmarks measure the installed configurations, including 0.8B's draft setting; they do not compare answer quality. [Raw timing log](docs/model-benchmark.csv) · [settings](docs/model-benchmark.json).
+
 The [efficiency notes](docs/efficiency.md) cover this machine's measurements, JSON versus YAML tool calls, a local reranker experiment, and further improvements. No universal speedup is claimed: model architecture, prompt length, memory pressure, and workload all matter.
 
 ## Development
@@ -187,10 +198,12 @@ The [efficiency notes](docs/efficiency.md) cover this machine's measurements, JS
 python3 ty.py --selftest
 python3 -m unittest discover -s tests -v
 python3 ty.py --demo
-python3 scripts/benchmark.py --model qwen3.5:2b --threads 2 4
+python3 scripts/benchmark.py --models qwen3.5:0.8b qwen3.5:2b --threads 2 4 --repeat 3
+# Save every streamed sample:
+python3 scripts/benchmark.py --threads 2 --output timings.csv --metadata timings.json
 ```
 
-The tests run without Ollama or network access. The benchmark requires the specified installed model and prints CSV timings. To install as a Python package instead of linking the checkout, use `python3 -m pip install .` in a virtual environment. The distribution name is `ty-local-agent`; the command is `ty`.
+The tests run without Ollama or network access. The benchmark requires the specified installed models and prints CSV timings for short and longer-context prompts. It records first-output latency, loading, prompt processing, generation, memory availability, and swap activity; warm repetitions are separated from first samples. To install as a Python package instead of linking the checkout, use `python3 -m pip install .` in a virtual environment. The distribution name is `ty-local-agent`; the command is `ty`.
 
 ## Limits
 

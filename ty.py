@@ -55,7 +55,7 @@ try:
 except ImportError:
     termios = None
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 try:
     import readline  # noqa: F401  (enables input history/editing when available)
@@ -397,7 +397,7 @@ class UI:
         self.out()
         if cfg.hints:
             self.hint("Ask a question, inspect a project, or make a small change.")
-            self.hint("/help commands  ·  Tab complete  ·  /paste multiline  ·  Ctrl-D exit")
+            self.hint("/ commands with descriptions  ·  /mode model picker  ·  Ctrl-C exit")
         self.out()
 
     def prompt(self, mode):
@@ -446,8 +446,9 @@ def render_inline(ui, text, depth=0):
 class AnswerRenderer:
     """Stream common Markdown in terminals; preserve Markdown in piped output."""
 
-    def __init__(self, ui):
+    def __init__(self, ui, label="ty"):
         self.ui = ui
+        self.label = label
         self.pending = ""
         self.code = False
         self.fence = ""
@@ -475,7 +476,7 @@ class AnswerRenderer:
     def line(self, line):
         line = plain(line)
         if not self.started:
-            self.ui.heading("ty")
+            self.ui.heading(self.label)
             self.started = True
         fence = re.match(r"^\s*(`{3,}|~{3,})(.*)$", line)
         if fence and not self.code:
@@ -540,11 +541,11 @@ class Spinner:
 
     def _run(self):
         i = 0
-        while not self._stop.wait(0.12):
+        while not self._stop.wait(0.2):
             with self._lock:
                 label = plain(self.label)
             el = time.monotonic() - self._start
-            suffix = " · Ctrl-C cancel" if el >= 8 else ""
+            suffix = " · Esc replace · Ctrl-C exit" if el >= 8 else ""
             text = f"  {self.FRAMES[i % len(self.FRAMES)]} {label} · {el:.0f}s{suffix}"
             self.ui.status(text)
             i += 1
@@ -575,9 +576,9 @@ DEFAULTS = {
     "max_out": 1200,
     "stream": True,
     "guardian": "rules",      # rules | llm | off  (llm uses the main model, cached)
-    "tools": "core",          # core | all
+    "tools": "core",          # core | code | web | all
     "compact_at": 0.72,       # fraction of ctx that triggers compaction
-    "num_thread": 0,          # 0 = let ollama decide
+    "num_thread": 0,          # 0 = choose physical cores when detected
     "web_cache_ttl": 86400,
     "unload_on_exit": False,
     "max_tokens": 768,
@@ -1281,12 +1282,14 @@ class Agent:
         data = json.dumps(body).encode()
         req = urllib.request.Request(OLLAMA + "/api/chat", data,
                                      {"Content-Type": "application/json"})
+        started, first = time.monotonic(), None
         with open_http(req, timeout=3600) as r:
             if progress is None:
                 d = json.load(r)
                 if d.get("error"):
                     raise RuntimeError(d["error"])
                 m = d.get("message", {})
+                d["ty_wall_s"] = time.monotonic() - started
                 return m.get("content", ""), m.get("thinking", ""), m.get("tool_calls") or [], d
             content, thinking, calls, stats = [], [], [], {}
             for raw in r:
@@ -1295,6 +1298,8 @@ class Agent:
                 if d.get("error"):
                     raise RuntimeError(d["error"])
                 msg = d.get("message") or {}
+                if first is None and any(msg.get(k) for k in ("content", "thinking", "tool_calls")):
+                    first = time.monotonic() - started
                 content.append(msg.get("content", ""))
                 thinking.append(msg.get("thinking", ""))
                 calls.extend(msg.get("tool_calls") or [])
@@ -1303,6 +1308,7 @@ class Agent:
                     stats = d
             if not stats:
                 raise RuntimeError("model stream ended before completion")
+            stats["ty_first_output_s"], stats["ty_wall_s"] = first, time.monotonic() - started
             return "".join(content), "".join(thinking), calls, stats
 
     def chat(self, messages, think, tools=None, ctx=None, model=None, spinner=None):
@@ -1334,6 +1340,7 @@ class Agent:
         req = urllib.request.Request(OLLAMA + "/api/chat", data,
                                      {"Content-Type": "application/json"})
 
+        started, first = time.monotonic(), None
         content_parts, thinking_parts, calls, stats = [], [], [], {}
         shown_think = False
         think_tail = ""
@@ -1364,6 +1371,8 @@ class Agent:
                     if d.get("error"):
                         raise RuntimeError(d["error"])
                     msg = d.get("message") or {}
+                    if first is None and any(msg.get(k) for k in ("content", "thinking", "tool_calls")):
+                        first = time.monotonic() - started
                     th = msg.get("thinking")
                     if th:
                         stop_spinner()
@@ -1404,6 +1413,9 @@ class Agent:
             # thinking finished but no visible summary stays on screen
             self.ui.err(self.ui.dim(f"  Thinking · {len(thinking)} characters"))
             sys.stderr.flush()
+        if not stats:
+            raise RuntimeError("model stream ended before completion")
+        stats["ty_first_output_s"], stats["ty_wall_s"] = first, time.monotonic() - started
         self.last_stats = stats
         return content, thinking, calls, stats
 
@@ -1812,6 +1824,9 @@ class Agent:
             spinner.stop()
         check_cancelled()
         prev = self.session.get("summary", "")
+        if "archive" not in self.session and prev:
+            self.session["history_summary"] = prev
+        self.session.setdefault("archive", []).extend(old)
         self.session["summary"] = (prev + "\n" + summary).strip()[-2000:]
         self.session["messages"] = recent
         self.ui.err(self.ui.dim(f"  Compacted {len(old)} messages · ~{before} → {self.est_tokens()} context tokens"
@@ -1875,6 +1890,7 @@ class Agent:
                 content, thinking, calls, stats = self.chat(
                     messages, think=think, tools=self.active_tools(), spinner=self._spinner)
             except KeyboardInterrupt:
+                self._cancelled = True
                 self.save()
                 return ""
             except Exception as e:
@@ -1954,6 +1970,7 @@ class Agent:
             content, _thinking, _calls, _stats = self.chat(
                 messages, think=False, tools=None, spinner=spinner)
         except KeyboardInterrupt:
+            self._cancelled = True
             return ""
         except Exception as e:
             self.ui.err(self.ui.red(f"model error: {e}"))
@@ -2030,6 +2047,10 @@ class Agent:
         self._turn_steps = step
         if self.cfg.ui == "verbose":
             self.ui.err(self.ui.grey(f"  step {step} · {pe} in / {ev} out · {tps:.1f} tok/s · {total:.0f}s"))
+            first = stats.get("ty_first_output_s")
+            self.ui.err(self.ui.grey(f"  load {(stats.get('load_duration') or 0) / 1e9:.1f}s · "
+                                    f"read {(stats.get('prompt_eval_duration') or 0) / 1e9:.1f}s" +
+                                    (f" · first output {first:.1f}s" if first is not None else "")))
         elif final:
             elapsed = time.monotonic() - self._turn_started if self._turn_started else total
             self.ui.err(self.ui.grey(f"  {elapsed:.0f}s · {step} step{'s' if step != 1 else ''} · {self._turn_gen} tokens"))
@@ -2040,6 +2061,14 @@ class Agent:
         st["prompt_tokens"] = st.get("prompt_tokens", 0) + pe
         st["seconds"] = st.get("seconds", 0.0) + total
         st["prefill_seconds"] = st.get("prefill_seconds", 0.0) + (stats.get("prompt_eval_duration") or 0) / 1e9
+        samples = self.session.setdefault("performance", [])
+        samples.append({"model": self.cfg.model, "at": time.time(), "prompt_tokens": pe,
+                        "output_tokens": ev, "prefill_s": (stats.get("prompt_eval_duration") or 0) / 1e9,
+                        "decode_s": dur, "load_s": (stats.get("load_duration") or 0) / 1e9,
+                        "wall_s": stats.get("ty_wall_s", total),
+                        "first_output_s": stats.get("ty_first_output_s"),
+                        "threads": self.cfg.num_thread or physical_cores(), "tools": self.cfg.tools})
+        del samples[:-100]
 
     # -------------------------------------------------- session persistence
 
@@ -2145,6 +2174,7 @@ def new_session(cwd, model):
         "model": model,
         "cwd": cwd,
         "summary": "",
+        "archive": [],
         "messages": [],
         "allow": [],
         "undo": [],
@@ -2203,9 +2233,10 @@ commands:
   /help                 show this help
   /status               model, mode, context usage, session
   /context              token breakdown (system, tools, messages)
-  /approve <how>        manual | auto | all | edits | readonly  (alias /mode)
+  /approve <how>        manual | auto | all | edits | readonly
   /reason <level>       off | terse | full  (terse = caveman thinking)
-  /model <m>            switch model (e.g. 0.8b, 2b)
+  /mode                 choose an installed model with arrows and Enter
+  /model [m]            model picker, or switch directly (e.g. 0.8b, 2b)
   /tools <set>          core | code | web | all
   /think                toggle thinking
   /caveman <m>          off | think | all
@@ -2221,7 +2252,7 @@ commands:
   /init                 create TY.md project-notes file
   /unload               free the model from RAM
   /clear                clear this session's messages
-  /quit                 exit (also Ctrl-D)
+  /exit                 save and exit (also /quit, Ctrl-C, Ctrl-D)
 
 approve modes: manual = ask every time, auto = approve safe / ask risky ("approve
 for me"), all = yolo (approve everything), edits = auto edits, readonly = no writes.
@@ -2234,9 +2265,46 @@ COMMANDS = [
     "/help", "/status", "/context", "/approve", "/mode", "/reason", "/think",
     "/caveman", "/model", "/tools", "/sessions", "/resume", "/new", "/compact",
     "/undo", "/allow", "/diff", "/stats", "/export", "/init", "/unload",
-    "/clear", "/quit", "/paste", "/ui", "/hints", "/last", "/threads",
+    "/clear", "/exit", "/quit", "/paste", "/ui", "/hints", "/last", "/threads",
     "/cancel", "/queue", "/clear-queue",
 ]
+COMMAND_DESCRIPTIONS = {
+    "/help": "Show commands and keyboard shortcuts",
+    "/mode": "Choose an installed model",
+    "/model": "Choose a model, or switch by name",
+    "/status": "Show model and session settings",
+    "/context": "Show the context token budget",
+    "/approve": "Choose tool permissions",
+    "/reason": "Choose off, terse, or full reasoning",
+    "/think": "Toggle model thinking",
+    "/caveman": "Choose terse thinking or replies",
+    "/tools": "Choose core, code, web, or all tools",
+    "/sessions": "List saved conversations",
+    "/resume": "Open a session and replay its conversation",
+    "/new": "Start a fresh conversation",
+    "/compact": "Summarize older context",
+    "/undo": "Revert the last file change",
+    "/allow": "Show saved tool permissions",
+    "/diff": "Show working directory changes",
+    "/stats": "Show session usage and model timings",
+    "/export": "Save the conversation as Markdown",
+    "/init": "Create TY.md project notes",
+    "/unload": "Free the current model from memory",
+    "/clear": "Clear this conversation",
+    "/exit": "Save the session and exit ty",
+    "/quit": "Save the session and exit ty",
+    "/paste": "Enter multiline text; finish with a dot",
+    "/ui": "Choose calm or verbose output",
+    "/hints": "Show or hide keyboard hints",
+    "/last": "Read a recent tool result",
+    "/threads": "Choose inference CPU threads",
+    "/cancel": "Stop work and keep your draft",
+    "/queue": "Inspect queued steering",
+    "/clear-queue": "Discard queued steering",
+}
+BUSY_COMMANDS = {"/help", "/paste", "/cancel", "/queue", "/clear-queue", "/exit", "/quit", "/ui", "/hints"}
+
+
 COMMAND_SET = set(COMMANDS) | {"/h", "/?", "/q", "/exit"}
 
 MODE_ALIASES = {
@@ -2339,7 +2407,7 @@ def read_input(ui, prompt):
 
 COMMAND_ARGS = {
     "/model": ["0.8b", "2b", "4b"], "/tools": list(TOOL_SETS),
-    "/approve": list(MODE_ALIASES), "/mode": list(MODE_HELP),
+    "/approve": ["manual", "auto", "edits", "readonly", "all"], "/mode": ["0.8b", "2b", "4b"],
     "/reason": ["off", "terse", "full"], "/caveman": ["off", "think", "all"],
     "/ui": ["calm", "verbose"], "/hints": ["on", "off"], "/threads": ["auto", "1", "2", "4"],
     "/help": ["all"],
@@ -2353,6 +2421,38 @@ def completion_options(line, text):
     return [c for c in COMMAND_ARGS.get(parts[0] if parts else "", []) if c.startswith(text)]
 
 
+def completion_suggestions(line, busy=False):
+    """Return insertable values and human descriptions; no network on keystrokes."""
+    if not line.lstrip().startswith("/") or "\n" in line:
+        return []
+    parts = line.lstrip().split()
+    word = parts[-1] if parts and not line.endswith(" ") else ""
+    options = completion_options(line, word)
+    if " " not in line.lstrip():
+        return [(value, COMMAND_DESCRIPTIONS[value]) for value in options
+                if not busy or value in BUSY_COMMANDS]
+    cmd = parts[0] if parts else ""
+    if busy and cmd not in BUSY_COMMANDS:
+        return []
+    descriptions = {
+        "/reason": {"off": "Skip reasoning tokens", "terse": "Reason in short fragments", "full": "Use full reasoning"},
+        "/tools": {"core": "General tools", "code": "File and coding tools", "web": "Search and page tools", "all": "Every tool"},
+        "/ui": {"calm": "Concise tool rows", "verbose": "Tool excerpts and timing details"},
+        "/hints": {"on": "Show input hints", "off": "Hide input hints"},
+        "/threads": {"auto": "Use physical CPU cores", "1": "One inference thread", "2": "Two inference threads", "4": "Four inference threads"},
+    }
+    result = []
+    for value in options:
+        if cmd == "/approve":
+            desc = MODE_HELP[MODE_ALIASES[value]]
+        elif cmd in ("/model", "/mode"):
+            desc = {"0.8b": "Smaller local model", "2b": "Larger local model", "4b": "Requires installation if unavailable"}.get(value, "Model")
+        else:
+            desc = descriptions.get(cmd, {}).get(value, COMMAND_DESCRIPTIONS.get(cmd, "Option"))
+        result.append((value, desc))
+    return result
+
+
 def setup_readline():
     if readline is None:
         return
@@ -2363,6 +2463,14 @@ def setup_readline():
             opts = completion_options(readline.get_line_buffer(), text)
             return opts[state] if state < len(opts) else None
         readline.set_completer(complete)
+        if hasattr(readline, "set_completion_display_matches_hook"):
+            def display(substitution, matches, longest):
+                descriptions = dict(completion_suggestions(readline.get_line_buffer()))
+                print()
+                for match in matches:
+                    print(f"  {match:<18} {descriptions.get(match, '')}")
+                readline.redisplay()
+            readline.set_completion_display_matches_hook(display)
         readline.parse_and_bind("tab: complete")
         readline.parse_and_bind("set enable-bracketed-paste on")
     except Exception:
@@ -2384,7 +2492,7 @@ def show_help(ui, full=False):
         ("Work", [("/paste", "paste multiple lines; finish with a dot"),
                   ("/undo", "revert the last file change"), ("/diff", "inspect changes"),
                   ("/last", "open the last tool result")]),
-        ("Tune", [("/model 0.8b", "use a smaller model"), ("/reason off", "skip thinking tokens"),
+        ("Tune", [("/mode", "choose a local model"), ("/reason off", "skip thinking tokens"),
                   ("/tools code", "load only coding tools"), ("/ui verbose", "show more detail")]),
         ("Session", [("/new", "fresh context"), ("/resume 0", "open the most recent session"),
                      ("/sessions", "find saved work"), ("/context", "see your token budget"),
@@ -2394,7 +2502,7 @@ def show_help(ui, full=False):
         for cmd, desc in rows:
             ui.out(f"  {cmd:<18} {ui.grey(desc)}")
     ui.out()
-    ui.hint("Tab completes commands and options. Ctrl-C cancels. Ctrl-D exits.")
+    ui.hint("Type / for described suggestions. Arrows select; Tab completes. Ctrl-C exits.")
     ui.hint("While working: Enter steers · Esc replaces · Ctrl-J adds a line · /queue shows pending input")
     ui.out()
 
@@ -2411,8 +2519,15 @@ HINTS = [
 
 class LiveConsole:
     """Edit steering while a worker runs; keep one composer below the scrollback."""
-    def __init__(self, ui, control, agent):
+    def __init__(self, ui, control, agent, idle=False, picker=None):
         self.ui, self.control, self.agent = ui, control, agent
+        self.idle, self.picker = idle, picker
+        self.input_done = threading.Event()
+        self.result = None
+        self.menu_index, self.menu_active = 0, False
+        self.menu_signature = None
+        self.screen = []
+        self.frame_level = 0
         self.output = ui.stream
         self.lock = threading.RLock()
         self.draft, self.cursor = "", 0
@@ -2445,6 +2560,56 @@ class LiveConsole:
         self.output.write("\033[?2004h")
         self.draw()
 
+    @contextlib.contextmanager
+    def frame(self):
+        # Terminals that support synchronized output present a whole update at once.
+        # Others ignore the marker; changed-line painting still avoids blank frames.
+        if self.frame_level == 0:
+            self.output.write("\033[?2026h\033[?25l")
+            self.output.flush()
+        self.frame_level += 1
+        try:
+            yield
+        finally:
+            self.frame_level -= 1
+            if self.frame_level == 0:
+                self.output.write("\033[?25h\033[?2026l")
+                self.output.flush()
+
+    def menu_items(self):
+        if self.approval or self.paste_lines is not None:
+            return []
+        if self.picker is not None:
+            return [item for item in self.picker if self.draft.lower() in item[0].lower()]
+        return completion_suggestions(self.draft, busy=not self.idle)
+
+    def menu(self):
+        items = self.menu_items()
+        signature = tuple(item[0] for item in items)
+        if signature != self.menu_signature:
+            self.menu_index, self.menu_active = 0, False
+            self.menu_signature = signature
+        self.menu_index = min(self.menu_index, max(0, len(items) - 1))
+        return items
+
+    def accept_completion(self, submit=False):
+        items = self.menu()
+        if not items:
+            return False
+        value = items[self.menu_index][0]
+        if self.picker is not None:
+            self.result = value
+            self.input_done.set()
+            return True
+        prefix = self.draft[:self.cursor]
+        word = prefix.split()[-1] if prefix and not prefix.endswith(" ") else ""
+        self.draft = prefix[:len(prefix) - len(word)] + value + " " + self.draft[self.cursor:]
+        self.cursor = len(prefix) - len(word) + len(value) + 1
+        self.menu_active = False
+        if submit and (value not in COMMAND_ARGS or value in ("/mode", "/model")):
+            self.submit()
+        return True
+
     def clear_display(self):
         if not self.rows:
             return
@@ -2454,13 +2619,16 @@ class LiveConsole:
         for _ in range(self.rows - 1):
             self.output.write("\033[1A\r\033[2K")
         self.rows, self.cursor_up = 0, 0
+        self.screen = []
 
     @staticmethod
     def char_width(char):
         return 0 if unicodedata.combining(char) else 2 if unicodedata.east_asian_width(char) in ("W", "F") else 1
 
     def layout(self):
-        prefix = "  " + (self.approval.prompt if self.approval else "steer › ")
+        prefix = "  " + (self.approval.prompt if self.approval else
+                          ("filter › " if self.picker is not None else
+                           f"ty {self.agent.cfg.mode} › " if self.idle and self.agent else "steer › "))
         width = self.ui.width
         lines = [prefix]
         col = sum(self.char_width(c) for c in prefix)
@@ -2490,24 +2658,66 @@ class LiveConsole:
         if self.agent is None or self.agent.cfg.hints:
             head += "  |  " + keys
         head = textwrap.shorten(head, width=width, placeholder="…")
-        return [self.ui.grey("  " + head)] + visible, row - first + 1, col
+        offset = 0 if self.idle and self.picker is None else 1
+        if self.picker is not None:
+            head = "Choose a model · ↑↓ select · Enter choose · Esc back"
+        canvas = ([self.ui.grey("  " + head)] if offset else []) + visible
+        items = self.menu()
+        if items:
+            height = max(1, min(6, shutil.get_terminal_size((80, 24)).lines - len(canvas) - 3))
+            start = max(0, self.menu_index - height + 1)
+            for index, (value, description) in enumerate(items[start:start + height], start):
+                selected = index == self.menu_index
+                label = f"{'›' if selected else ' '} {value:<14} "
+                description = textwrap.shorten(description, width=max(8, self.ui.width - len(label)), placeholder="…")
+                text = label + description
+                canvas.append("  " + (self.ui.cyan(text) if selected else self.ui.grey(text)))
+            if len(items) > height:
+                canvas.append(self.ui.grey(f"  {self.menu_index + 1}/{len(items)} · ↑↓ select · Tab complete"))
+        elif self.picker is not None:
+            canvas.append(self.ui.grey("  No matching installed models. Escape goes back."))
+        return canvas, row - first + offset, col
 
     def draw(self):
         if self.closed:
             return
         with self.lock:
-            self.clear_display()
             lines, cursor_row, col = self.layout()
-            self.output.write("\n".join(lines))
-            self.rows = len(lines)
-            self.cursor_up = self.rows - cursor_row - 1
-            if self.cursor_up:
-                self.output.write(f"\033[{self.cursor_up}A")
-            self.output.write("\r" + (f"\033[{col}C" if col else ""))
-            self.output.flush()
+            with self.frame():
+                if not self.screen:
+                    self.output.write("\n".join(lines))
+                    at = len(lines) - 1
+                else:
+                    at = len(self.screen) - self.cursor_up - 1
+                    if at:
+                        self.output.write(f"\033[{at}A")
+                    self.output.write("\r")
+                    at = 0
+                    if len(lines) > len(self.screen):
+                        if len(self.screen) > 1:
+                            self.output.write(f"\033[{len(self.screen) - 1}B")
+                        self.output.write("\n" * (len(lines) - len(self.screen)))
+                        self.output.write(f"\033[{len(lines) - 1}A\r")
+                    for index in range(max(len(lines), len(self.screen))):
+                        old = self.screen[index] if index < len(self.screen) else None
+                        new = lines[index] if index < len(lines) else ""
+                        if old == new:
+                            continue
+                        delta = index - at
+                        if delta:
+                            self.output.write(f"\033[{abs(delta)}{'B' if delta > 0 else 'A'}")
+                        self.output.write("\r" + new + "\033[K")
+                        at = index
+                delta = cursor_row - at
+                if delta:
+                    self.output.write(f"\033[{abs(delta)}{'B' if delta > 0 else 'A'}")
+                self.output.write("\r" + (f"\033[{col}C" if col else ""))
+                self.screen = lines
+                self.rows = len(lines)
+                self.cursor_up = self.rows - cursor_row - 1
 
     def write(self, text, stream):
-        with self.lock:
+        with self.lock, self.frame():
             self.clear_display()
             print(text, file=stream, flush=True)
             self.draw()
@@ -2548,6 +2758,7 @@ class LiveConsole:
 
     def submit(self):
         text = self.draft
+        literal_paste = self.paste_lines is not None
         if self.paste_lines is not None:
             if text.strip() != ".":
                 self.paste_lines.append(text)
@@ -2559,7 +2770,23 @@ class LiveConsole:
             self.paste_lines = []
             self.draft, self.cursor = "", 0
             return
-        if text.strip() in ("/cancel", "/stop"):
+        if self.idle:
+            # Match the existing fence/backslash continuation behavior as well as Ctrl-J.
+            if not literal_paste and not text.lstrip().startswith("/") and (text.rstrip().endswith("\\") or text.count("```") % 2):
+                if text.rstrip().endswith("\\"):
+                    self.draft = text.rstrip()[:-1]
+                    self.cursor = len(self.draft)
+                self.insert("\n")
+                return
+            self.result = text
+            self.input_done.set()
+            if text.strip() and readline:
+                readline.add_history(text)
+            return
+        if text.strip() in ("/exit", "/quit", "/q"):
+            self.exit_requested = True
+            self.control.cancel()
+        elif text.strip() in ("/cancel", "/stop"):
             self.control.cancel()
         elif text.strip() == "/queue":
             queued = self.control.queued()
@@ -2568,7 +2795,9 @@ class LiveConsole:
             self.control.clear()
             self.ui.hint("Queued steering cleared.")
         elif text.strip() == "/help":
-            self.ui.hint("Enter queues steering; Esc runs your draft/latest steering now. Ctrl-C stops. Ctrl-J inserts a line.")
+            self.ui.hint("Enter queues steering; Esc runs your draft/latest steering now. /cancel stops; Ctrl-C exits. Ctrl-J inserts a line.")
+        elif not self.approval and self.agent and text.strip().split()[:1] in (["/ui"], ["/hints"]):
+            handle_command(self.agent, self.ui, text.strip())
         elif self.approval and text.startswith("/steer "):
             self.control.submit(text[7:])
         elif self.approval:
@@ -2588,20 +2817,36 @@ class LiveConsole:
     def key(self, key):
         if self.control.cancelled.is_set():
             return
+        items = self.menu()
         if key in ("\r", "ENTER"):
-            self.submit()
+            exact = any(value == self.draft.strip() for value, _ in items)
+            if self.picker is not None or (items and (self.menu_active or not exact)):
+                self.accept_completion(submit=True)
+            else:
+                self.submit()
         elif key in ("\n", "\033\r"):
             self.insert("\n")
+        elif key == "ESC" and self.idle:
+            if self.picker is not None:
+                self.input_done.set()
+            else:
+                self.draft, self.cursor = "", 0
+                self.menu_active = False
         elif key == "ESC":
             draft = self.suspended[0] if self.approval and self.suspended else self.draft
             replacement = draft if draft.strip() else self.control.latest
             self.control.cancel(replacement)
             self.draft, self.cursor = "", 0
+        elif key == "\x18" and not self.idle:
+            self.control.cancel()
         elif key == "\x03":
+            self.exit_requested = True
+            self.input_done.set()
             self.control.cancel()
         elif key == "\x04":
             if not self.draft:
                 self.exit_requested = True
+                self.input_done.set()
                 self.control.cancel()
             elif self.cursor < len(self.draft):
                 self.draft = self.draft[:self.cursor] + self.draft[self.cursor + 1:]
@@ -2625,6 +2870,9 @@ class LiveConsole:
             self.cursor = len(self.draft)
         elif key == "\033[3~":
             self.draft = self.draft[:self.cursor] + self.draft[self.cursor + 1:]
+        elif key in ("\033[A", "\033[B") and items:
+            self.menu_index = (self.menu_index + (-1 if key == "\033[A" else 1)) % len(items)
+            self.menu_active = True
         elif key in ("\033[A", "\033[B") and not self.approval:
             if self.history_index == len(self.history):
                 self.history_draft = self.draft
@@ -2632,15 +2880,16 @@ class LiveConsole:
             self.draft = self.history[self.history_index] if self.history_index < len(self.history) else self.history_draft
             self.cursor = len(self.draft)
         elif key == "\t":
-            prefix = self.draft[:self.cursor]
-            word = prefix.split()[-1] if prefix and not prefix.endswith(" ") else ""
-            options = completion_options(prefix, word)
-            if options:
-                common = os.path.commonprefix(options)
-                self.draft = prefix[:len(prefix) - len(word)] + common + (" " if len(options) == 1 else "") + self.draft[self.cursor:]
-                self.cursor = len(prefix) - len(word) + len(common) + (len(options) == 1)
-                if len(options) > 1:
-                    self.ui.hint(" · ".join(options))
+            if items and (self.menu_active or len(items) == 1):
+                self.accept_completion()
+            elif items:
+                self.menu_active = True
+                prefix = self.draft[:self.cursor]
+                word = prefix.split()[-1] if prefix and not prefix.endswith(" ") else ""
+                common = os.path.commonprefix([value for value, _ in items])
+                if len(common) > len(word):
+                    self.draft = prefix[:len(prefix) - len(word)] + common + self.draft[self.cursor:]
+                    self.cursor = len(prefix) - len(word) + len(common)
         elif key and not key.startswith("\033") and ord(key[0]) >= 32:
             self.insert(key)
 
@@ -2688,9 +2937,9 @@ class LiveConsole:
                 else:
                     key, self.buffer = self.buffer[0], self.buffer[1:]
                 self.key(key)
-                if self.control.cancelled.is_set():
+                if self.control.cancelled.is_set() or self.input_done.is_set():
                     break
-            if text or self.control.cancelled.is_set():
+            if (text or self.control.cancelled.is_set()) and not (self.idle and self.input_done.is_set()):
                 self.draw()
 
     def pump(self, done):
@@ -2709,23 +2958,115 @@ class LiveConsole:
 
     def close(self):
         with self.lock:
-            self.clear_display()
-            self.closed = True
-            self.ui.console = None
-            self.output.write("\033[?2004l\033[?25h")
-            self.output.flush()
-            if self.original_term is not None:
-                termios.tcsetattr(sys.stdin.fileno(), termios.TCSANOW, self.original_term)
+            try:
+                self.clear_display()
+                self.output.write("\033[?2004l\033[?25h\033[?2026l")
+                self.output.flush()
+            finally:
+                self.closed = True
+                self.ui.console = None
+                if self.original_term is not None:
+                    termios.tcsetattr(sys.stdin.fileno(), termios.TCSANOW, self.original_term)
+
+
+def read_prompt(agent, draft=""):
+    if termios is None or not sys.stdin.isatty() or not agent.ui.tty:
+        if draft and readline:
+            readline.set_startup_hook(lambda: readline.insert_text(draft))
+        try:
+            return read_input(agent.ui, agent.ui.prompt(agent.cfg.mode))
+        finally:
+            if readline:
+                readline.set_startup_hook(None)
+    console = LiveConsole(agent.ui, TaskControl(), agent, idle=True)
+    console.draft, console.cursor = draft, len(draft)
+    try:
+        console.start()
+        console.pump(console.input_done)
+    finally:
+        console.close()
+    if console.exit_requested:
+        raise EOFError()
+    # Keep the submitted prompt in scrollback, without the suggestion list.
+    agent.ui.out(plain(agent.ui.prompt(agent.cfg.mode)) + plain(console.result or ""))
+    return console.result or ""
+
+
+def choose_model(agent):
+    ui = agent.ui
+    try:
+        models = json.loads(http_get(OLLAMA + "/api/tags", timeout=5)).get("models", [])
+    except Exception as exc:
+        ui.err(ui.red(f"Could not list local models: {exc}"))
+        return None
+    items = []
+    for model in sorted(models, key=lambda m: m.get("size", 0)):
+        name = model.get("name") or model.get("model")
+        if not name:
+            continue
+        details = model.get("details") or {}
+        desc = " · ".join(str(x) for x in (details.get("parameter_size"), details.get("quantization_level"),
+                         f"{model.get('size', 0) / 1024**3:.1f} GiB on disk") if x)
+        items.append((name, desc + (" · current" if name == agent.cfg.model else "")))
+    if not items:
+        ui.hint("No local models found. Install one with ollama pull first.")
+        return None
+    if termios is None or not sys.stdin.isatty() or not ui.tty:
+        for name, desc in items:
+            ui.row(name, desc)
+        ui.hint("Use /model <name> to select a model.")
+        return None
+    console = LiveConsole(ui, TaskControl(), agent, idle=True, picker=items)
+    console.menu()
+    console.menu_index = next((i for i, item in enumerate(items) if item[0] == agent.cfg.model), 0)
+    try:
+        console.start()
+        console.pump(console.input_done)
+    finally:
+        console.close()
+    if console.exit_requested:
+        raise EOFError()
+    return console.result
+
+
+def replay_session(agent):
+    """Replay stored conversation without sending it to the model again."""
+    session, ui = agent.session, agent.ui
+    ui.heading("Conversation", session.get("title", "untitled"))
+    archive = session.get("archive", [])
+    earlier = session.get("history_summary") or (session.get("summary") if not archive else "")
+    if earlier:
+        renderer = AnswerRenderer(ui, "earlier summary")
+        renderer.feed(earlier)
+        renderer.finish()
+    for message in archive + session.get("messages", []):
+        role, content = message.get("role"), message.get("content") or ""
+        if content:
+            label = "you" if role == "user" else "ty" if role == "assistant" else "tool · " + message.get("tool_name", "result")
+            if not ui.tty:
+                ui.heading(label)
+            renderer = AnswerRenderer(ui, label)
+            renderer.feed(content)
+            renderer.finish()
+        for call in message.get("tool_calls") or []:
+            fn = call.get("function") or {}
+            ui.out(ui.grey("  tool · " + fn.get("name", "?") + " " + plain(json.dumps(fn.get("arguments", {}), ensure_ascii=False))))
+    ui.hint("Conversation restored. Continue below.")
+    ui.out()
 
 
 def run_interactive_task(agent, text, action=None):
     """Run a task or maintenance action while editing/queuing/replacing input."""
     if termios is None or not sys.stdin.isatty() or not agent.ui.tty:
-        if action is not None:
-            action()
-        else:
-            agent.run_task(text)
-        return False, ""
+        try:
+            if action is not None:
+                action()
+            else:
+                agent.run_task(text)
+        except KeyboardInterrupt:
+            agent.save()
+            return True, ""
+        return getattr(agent, "_cancelled", False), ""
     draft, exit_requested = "", False
     while text or action is not None:
         control = TaskControl()
@@ -2778,7 +3119,8 @@ def run_interactive_task(agent, text, action=None):
             agent.session["messages"].append({"role": "assistant", "content": "[Task interrupted by user.]"})
             agent.save()
             text = control.replacement
-            agent.ui.hint("Stopped. Starting your new request." if text else "Stopped. Your draft is preserved.")
+            if not exit_requested:
+                agent.ui.hint("Stopped. Starting your new request." if text else "Stopped. Your draft is preserved.")
         else:
             text = "\n\n".join(control.take())
         if exit_requested:
@@ -2789,47 +3131,34 @@ def run_interactive_task(agent, text, action=None):
 def repl(agent, ui):
     setup_readline()
     ui.banner(agent)
-    turns = 0
-    draft = ""
+    if agent.session.get("messages") or agent.session.get("archive") or agent.session.get("summary"):
+        replay_session(agent)
+    turns, draft = 0, ""
     while True:
         if agent.cfg.hints and turns:
             ui.hint(HINTS[(turns - 1) % len(HINTS)])
         try:
-            if draft and readline:
-                readline.set_startup_hook(lambda: readline.insert_text(draft))
-            try:
-                text = read_input(ui, ui.prompt(agent.cfg.mode))
-            finally:
-                if readline:
-                    readline.set_startup_hook(None)
-                draft = ""
-        except EOFError:
-            ui.out()
-            break
-        except KeyboardInterrupt:
-            ui.out()
-            continue
-        text = text.strip("\n")
-        if not text.strip():
-            continue
-        head = text.lstrip().split()[0]
-        if head in COMMAND_SET and "\n" not in text.strip():
-            if handle_command(agent, ui, text.strip()):
-                break
-            draft, agent.input_draft = agent.input_draft, ""
-            continue
-        if head.startswith("/") and "\n" not in text.strip():
-            suggestions = difflib.get_close_matches(head, COMMANDS, n=1, cutoff=0.65)
-            if suggestions:
-                ui.out(ui.yellow(f"  Unknown command {head}. Try {suggestions[0]} or /help."))
+            text = read_prompt(agent, draft).strip("\n")
+            draft = ""
+            if not text.strip():
                 continue
-        try:
+            head = text.lstrip().split()[0]
+            if head in COMMAND_SET and "\n" not in text.strip():
+                if handle_command(agent, ui, text.strip()):
+                    break
+                draft, agent.input_draft = agent.input_draft, ""
+                continue
+            if head.startswith("/") and "\n" not in text.strip():
+                suggestions = difflib.get_close_matches(head, COMMANDS, n=1, cutoff=0.65)
+                if suggestions:
+                    ui.out(ui.yellow(f"  Unknown command {head}. Try {suggestions[0]} or /help."))
+                    continue
             exit_requested, draft = run_interactive_task(agent, text)
             if exit_requested:
                 break
-        except KeyboardInterrupt:
-            ui.err(ui.yellow("  Task cancelled. Session saved."))
-            agent.save()
+        except (EOFError, KeyboardInterrupt):
+            ui.out()
+            break
         turns += 1
 
 
@@ -2878,7 +3207,7 @@ def handle_command(agent, ui, line):
         ui.row("threads", str(cfg.num_thread or physical_cores() or "Ollama default"))
         ui.row("session", agent.session["id"])
         ui.out()
-    elif cmd in ("/mode", "/approve"):
+    elif cmd == "/approve":
         set_mode(agent, ui, rest)
     elif cmd == "/reason":
         set_reason(agent, ui, rest)
@@ -2908,11 +3237,23 @@ def handle_command(agent, ui, line):
                        f"tool_calls={s.get('tool_calls', 0)} "
                        f"gen_tokens={s.get('gen_tokens', 0)} "
                        f"time={s.get('seconds', 0):.0f}s"))
+        groups = {}
+        for sample in agent.session.get("performance", []):
+            groups.setdefault(sample["model"], []).append(sample)
+        for model, samples in groups.items():
+            decode = sum(row["decode_s"] for row in samples)
+            rate = sum(row["output_tokens"] for row in samples) / decode if decode else 0
+            first = [row["first_output_s"] for row in samples if row.get("first_output_s") is not None]
+            count = len(samples)
+            ui.row(model, f"{count} steps · {rate:.1f} tokens/s · "
+                   f"average load {sum(row['load_s'] for row in samples) / count:.1f}s · "
+                   f"read {sum(row['prefill_s'] for row in samples) / count:.1f}s" +
+                   (f" · first output {sum(first) / len(first):.1f}s" if first else ""))
     elif cmd == "/export":
         path = rest or os.path.join(agent.cwd, f"ty-{agent.session['id']}.md")
         rows = [f"# ty session {agent.session['id']}",
                 f"_{agent.session.get('title', '')}_", ""]
-        for m in agent.session.get("messages", []):
+        for m in agent.session.get("archive", []) + agent.session.get("messages", []):
             role, content = m.get("role"), m.get("content", "")
             if role == "user":
                 rows.append(f"## user\n\n{content}\n")
@@ -2940,12 +3281,12 @@ def handle_command(agent, ui, line):
             ui.out(ui.grey(f"caveman = {rest}"))
         else:
             ui.out(ui.grey("caveman: off | think | all"))
-    elif cmd == "/model":
-        if rest:
-            cfg.model = resolve_model(rest)
-            ui.out(ui.grey(f"model = {cfg.model}"))
-        else:
-            ui.out(ui.grey(f"model = {cfg.model}"))
+    elif cmd in ("/model", "/mode"):
+        selected = resolve_model(rest) if rest else choose_model(agent)
+        if selected:
+            cfg.model = selected
+            agent.save()
+            ui.row("model", cfg.model)
     elif cmd == "/sessions":
         if not list_sessions():
             ui.hint("No saved sessions yet. Your work is saved automatically.")
@@ -2958,8 +3299,10 @@ def handle_command(agent, ui, line):
             agent.save()
             agent.cwd = s.get("cwd", agent.cwd)
             agent.session = s
+            cfg.model = resolve_model(s.get("model") or cfg.model)
             agent.session_allow = list(s.get("allow", []))
             ui.out(ui.grey(f"resumed {s['id']} ({len(s['messages'])} messages)"))
+            replay_session(agent)
         else:
             ui.out(ui.red("session not found"))
     elif cmd == "/new":
@@ -2999,6 +3342,8 @@ def handle_command(agent, ui, line):
         ui.out(ui.grey("unloading " + cfg.model) if unload_model(cfg.model) else ui.red("unload failed"))
     elif cmd == "/clear":
         agent.session["messages"] = []
+        agent.session["archive"] = []
+        agent.session.pop("history_summary", None)
         agent.session["summary"] = ""
         agent.save()
         ui.out(ui.grey("cleared"))
@@ -3177,7 +3522,7 @@ def build_parser(cfg):
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                  epilog="Start with ty, then /help. No model needed for --demo or --selftest.")
     ap.add_argument("task", nargs="*", help="task text (omit for interactive)")
-    ap.add_argument("-m", "--model", default=cfg["model"], help="0.8b | 2b | 4b | ollama tag")
+    ap.add_argument("-m", "--model", default=None, help="0.8b | 2b | 4b | ollama tag")
     ap.add_argument("--fast", action="store_true", help="use the small/faster model (0.8b)")
     ap.add_argument("-c", "--ctx", type=int, default=cfg["ctx"], help="context window")
     ap.add_argument("-C", "--dir", default=os.getcwd(), help="working directory")
@@ -3227,7 +3572,7 @@ def main(argv=None):
     cfg = load_config()
     ap = build_parser(cfg)
     a = ap.parse_args(argv)
-    model = resolve_model("qwen3.5:0.8b" if a.fast else a.model)
+    model = resolve_model("qwen3.5:0.8b" if a.fast else a.model or cfg["model"])
 
     if a.ctx < 512 or a.max_tokens < 1 or a.max_out < 256 or a.max_steps < 1 or a.threads < 0:
         ap.error("ctx >= 512, max-tokens/steps >= 1, max-out >= 256, threads >= 0 required")
@@ -3250,7 +3595,7 @@ def main(argv=None):
             print(f"  [{i}] {s['id']}  {s.get('title', '')[:60]}")
         return 0
 
-    model = resolve_model("qwen3.5:0.8b" if a.fast else a.model)
+    model = resolve_model("qwen3.5:0.8b" if a.fast else a.model or cfg["model"])
     if a.yolo:
         a.mode = "yolo"
     cfg.update({
@@ -3286,6 +3631,8 @@ def main(argv=None):
         s = find_session(a.resume or "")
         session = s or new_session(cwd, model)
         if s:
+            if a.model is None and not a.fast:
+                cfg.model = resolve_model(s.get("model") or cfg.model)
             cwd = s.get("cwd", cwd)
             ui.out(ui.grey(f"resumed session {s['id']} ({len(s['messages'])} messages)"))
     elif a.new:
@@ -3304,6 +3651,8 @@ def main(argv=None):
 
     try:
         if a.task:
+            if a.resume or a.continue_:
+                replay_session(agent)
             agent.run_task(" ".join(a.task))
         else:
             repl(agent, ui)
@@ -3316,7 +3665,7 @@ def main(argv=None):
             except Exception:
                 pass
         if cfg.unload_on_exit:
-            unload_model(model)
+            unload_model(cfg.model)
     return 0
 
 

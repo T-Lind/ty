@@ -349,7 +349,7 @@ class CancelIOTest(unittest.TestCase):
 
 @unittest.skipUnless(ty.termios is not None, 'POSIX pseudo-terminal required')
 class TerminalIntegrationTest(unittest.TestCase):
-    def run_terminal_case(self, replace, compaction=False):
+    def run_terminal_case(self, replace, compaction=False, exit_key=None):
         import pty
         master, slave = pty.openpty()
         before = ty.termios.tcgetattr(slave)
@@ -394,7 +394,7 @@ if int(sys.argv[3]):
     ty.handle_command(a,ui,'/compact')
 else:
     exit_requested,draft=ty.run_interactive_task(a,'initial')
-print('TASK_DONE',flush=True)
+print('TASK_DONE EXIT_REQUESTED:'+str(locals().get('exit_requested',False)),flush=True)
 '''
             env = dict(os.environ, XDG_DATA_HOME=root + '/data', XDG_CONFIG_HOME=root + '/config', XDG_CACHE_HOME=root + '/cache')
             child = subprocess.Popen([sys.executable, '-c', fixture, root, str(int(replace)), str(int(compaction))], stdin=slave, stdout=slave, stderr=slave, env=env)
@@ -405,14 +405,18 @@ print('TASK_DONE',flush=True)
                     if select.select([master], [], [], .1)[0]:
                         capture += os.read(master, 65536)
                 self.assertIn(b'WAITING_FOR_INPUT', capture)
-                os.write(master, b'use Fox News\r' + (b'\x1b' if replace else b''))
+                os.write(master, exit_key if exit_key is not None else b'use Fox News\r' + (b'\x1b' if replace else b''))
                 deadline = time.monotonic() + 5
                 while b'TASK_DONE' not in capture and time.monotonic() < deadline:
                     if select.select([master], [], [], .1)[0]:
                         capture += os.read(master, 65536)
                 child.wait(timeout=2)
                 self.assertEqual(child.returncode, 0, capture.decode(errors='replace'))
-                self.assertIn(b'NEW_QUERY:use Fox News', capture)
+                if exit_key is None:
+                    self.assertIn(b'NEW_QUERY:use Fox News', capture)
+                else:
+                    self.assertIn(b'EXIT_REQUESTED:True', capture)
+                    self.assertNotIn(b'NEW_QUERY:', capture)
                 self.assertNotIn(b'OLD_TOOL_EXECUTED', capture)
                 self.assertEqual(ty.termios.tcgetattr(slave), before)
             finally:
@@ -430,6 +434,12 @@ print('TASK_DONE',flush=True)
 
     def test_escape_during_manual_compaction_starts_replacement(self):
         self.run_terminal_case(True, compaction=True)
+
+    def test_ctrl_c_exits_during_a_model_task(self):
+        self.run_terminal_case(True, exit_key=b"\x03")
+
+    def test_exit_command_exits_during_a_model_task(self):
+        self.run_terminal_case(True, exit_key=b"/exit\r")
 
 
 if __name__ == '__main__':

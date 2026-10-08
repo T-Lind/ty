@@ -1,0 +1,74 @@
+{
+  "recorded_at": "2026-10-07T23:58:40-0500",
+  "machine": "x86_64",
+  "platform": "Linux",
+  "logical_cpus": 4,
+  "available_mb": 3411,
+  "settings": {
+    "models": [
+      "qwen3.5:0.8b",
+      "qwen3.5:2b"
+    ],
+    "threads": [
+      2,
+      4
+    ],
+    "repeat": 3,
+    "tokens": 32,
+    "context": 4096,
+    "workloads": [
+      "short",
+      "context"
+    ],
+    "think": false,
+    "temperature": 0,
+    "seed": 42
+  },
+  "notes": "First means first sample for this workload/settings, not a guaranteed cold load. Warm repetitions may reuse prompt cache. Other clients can add queueing. Models use their installed defaults, including draft_num_predict=2 for 0.8b. Client request overrides are recorded above. This compares the installed configurations and does not measure answer quality. OS scheduling and other applications were not isolated.",
+  "server": {
+    "version": "0.40.0"
+  },
+  "models": {
+    "qwen3.5:0.8b": {
+      "details": {
+        "parent_model": "qwen35-validation-20260930:0.8b-stock-q8_0-q8draft2",
+        "format": "gguf",
+        "family": "qwen35",
+        "families": [
+          "qwen35"
+        ],
+        "parameter_size": "752.39M",
+        "quantization_level": "Q8_0",
+        "runner": "llamacpp"
+      },
+      "capabilities": [
+        "completion",
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "parameters": "draft_num_predict              2\npresence_penalty               1.5\ntemperature                    1\ntop_k                          20\ntop_p                          0.95"
+    },
+    "qwen3.5:2b": {
+      "details": {
+        "parent_model": "model.gguf",
+        "format": "gguf",
+        "family": "qwen35",
+        "families": [
+          "qwen35"
+        ],
+        "parameter_size": "1.9B",
+        "quantization_level": "Q8_0",
+        "runner": "llamacpp"
+      },
+      "capabilities": [
+        "completion",
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "parameters": "temperature                    1\ntop_k                          20\ntop_p                          0.95\npresence_penalty               1.5"
+    }
+  },
+  "cpu": "Intel Core i7-3520M; 2 physical cores / 4 logical threads; AVX, no AVX2"
+}

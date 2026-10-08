@@ -2,10 +2,13 @@
 
 The first target is **end-to-end task time**, with correctness and successful tool execution held constant. A prettier or shorter serialization is useful only when it improves that result.
 
-## What changed in ty 0.3 and 0.4
+## What changed in ty 0.3–0.5
 
 | Change | Why it helps | Tradeoff |
 | --- | --- | --- |
+| Changed-line composer updates | Reduces repainting and terminal flicker | Synchronized frames also depend on terminal support |
+| Per-model latency logs in `/stats` | Identifies loading, prompt processing, and output generation separately | Real task prompts vary; benchmark separately for comparisons |
+| Full history archive outside the prompt | Allows complete resume/export after compaction | Session files grow with the saved conversation |
 | Batched native tool calls | Several independent actions can use one model response | Execution remains ordered for approval and steering |
 | Live steering and cancellation | Stops unwanted work instead of waiting through another model generation | Completed mutations are preserved |
 | Streamed compaction progress | Shows work and cancellation while context is summarized | Token counts are approximate; no progress percentage |
@@ -45,18 +48,47 @@ Recommended starting points:
 1. Use `--fast` for short questions and simple changes. Stay on one model for a work session to avoid reloads.
 2. Use `--tools code` for coding or `--tools web` for research.
 3. Keep thinking off. Try terse reasoning only when it improves task completion.
-4. Compare `--threads 2` and `--threads 4` on a representative task. More logical threads can improve or hurt performance on a two-core CPU.
+4. Start with `--threads 2`: the new comparison favored it for 0.8B and found no benefit from four threads for 2B. Repeat the measurement on the intended workload before changing it.
 5. Keep the model resident during a session. Use `/unload` when you are finished, or `--unload-on-exit`. `--keep-alive 0` unloads after requests and can be expensive in a multi-step task.
 6. Close memory-heavy applications if memory pressure rises. Do not increase the context merely to avoid pruning.
 7. Use `/new` when old conversation stops helping. Current compaction summarizes older turns; it does not solve an oversized single turn.
 
-### Reproducible thread comparison
+### Model and thread comparison, October 7–8, 2026
+
+```sh
+python3 scripts/benchmark.py --models qwen3.5:0.8b qwen3.5:2b \
+  --threads 2 4 --repeat 3 --tokens 32 \
+  --output timings.csv --metadata timings.json
+```
+
+[Raw CSV](model-benchmark.csv) and [installed model/settings metadata](model-benchmark.json) contain 24 samples: two installed models, two thread counts, two prompt lengths, and three repetitions. Client settings were deterministic, thinking off, a 4,096-token context, and a 32-token output cap. The installed tags both use Q8_0; 0.8B also has `draft_num_predict = 2`, while 2B does not. This compares those installed configurations, rather than isolating parameter count or answer quality. Other applications and OS scheduling were not isolated.
+
+Warm rows below are medians of repetitions 2 and 3.
+
+| Model | Threads | Warm short task | Warm short generation | First 560-token prompt processing |
+| --- | --- | --- | --- | --- |
+| 0.8B | 2 | 2.89 s | 11.93 tokens/s | 18.34 s |
+| 0.8B | 4 | 4.13 s | 8.34 tokens/s | 18.70 s |
+| 2B | 2 | 4.83 s | 7.22 tokens/s | 42.85 s |
+| 2B | 4 | 4.95 s | 7.03 tokens/s | 42.62 s |
+
+At two threads, 0.8B generated about 1.65 times as many tokens per second and processed the first longer prompt about 2.34 times as fast. The repeated longer prompt took only 0.18–0.41 seconds to process on warm samples, showing a large cache effect in this workload. Reported prompt-token counts still describe the prompt, so warm prefill tokens/s must not be interpreted as fresh-token throughput.
+
+The first request after changing model/thread settings included roughly 4.7–6.2 seconds of loading. Swap-out activity was concentrated around some model changes; warm samples had little swap activity. Keep one model loaded through a task and avoid switching for every page. Ollama documents the request-level [keep_alive setting and concurrency memory cost](https://docs.ollama.com/faq).
+
+For routine work, try `ty --fast --tools code --threads 2`; for research, use `--tools web`. The larger model remains available in `/mode`. This keeps the model and tool choice explicit instead of changing behavior based on guessed task difficulty.
+
+`/stats` now records the last 100 ordinary inference steps with model, thread count, tool set, prompt/output counts, first-output latency, load time, prompt-processing time, decode time, and wall time. The data remains in the session file, outside the prompt. `/ui verbose` prints latency components after each step. First output includes reasoning and native tool-call frames; it can precede the first rendered paragraph.
+
+Both installed models use eight-bit weights. The official registry also offers a smaller [2B Q4_K_M build](https://ollama.com/library/qwen3.5:2b-q4_K_M), listed at 1.9 GB versus 2.7 GB for the [Q8_0 build](https://ollama.com/library/qwen3.5:2b-q8_0). This is the next candidate to benchmark for reduced memory traffic on this CPU. It is not installed or measured here; quantization may affect tool reliability, and speed depends on this processor’s kernels. Test it with read/search/edit tasks before selecting it as a default.
+
+### Earlier thread comparison
 
 ```sh
 python3 scripts/benchmark.py --model qwen3.5:2b --threads 2 4 --repeat 2
 ```
 
-The script sends the same short prompt with a 4,096-token context, deterministic sampling, thinking off, and a 32-token output cap. It reports prompt/output counts, prefill and decode rates, total time, and load time. Changing thread settings may reload the runner. Compare warm runs separately from the first run after a change.
+The earlier comparison used the same short prompt with a 4,096-token context, deterministic sampling, thinking off, and a 32-token output cap. It reports prompt/output counts, prefill and decode rates, total time, and load time. Changing thread settings may reload the runner. Compare warm runs separately from the first run after a change.
 
 The comparison was rerun with other local model requests finished. [Raw measurements](laptop-benchmark.csv):
 
@@ -116,7 +148,7 @@ The implemented lexical selector is instant by comparison and returns source exc
 | Priority | Experiment | Success measure |
 | --- | --- | --- |
 | 1 | Add line-range reads and paginated grep output | Fewer follow-up reads without losing the relevant code |
-| 2 | Track time to first visible answer and prefill separately | Identify whether loading, reading, or generation dominates |
+| 2 | Compare the explicit 2B Q4_K_M tag and draft settings | Lower wall time and memory with unchanged tool success |
 | 3 | Evaluate a small optional CPU reranker | More relevant evidence at lower total task time |
 | 4 | Add a structured search-provider adapter | Fewer provider failures and cleaner snippets; credentials optional |
 | 5 | Preserve complete sessions but budget older turns without a generation pass | Less compaction time with adequate task continuity |
