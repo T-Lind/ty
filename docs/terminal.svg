@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="940" height="628" viewBox="0 0 940 628" role="img" aria-label="ty terminal interface, illustrative demo">
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="651" viewBox="0 0 940 651" role="img" aria-label="ty terminal interface, illustrative demo">
 <title>ty — tiny, at your terminal</title>
 <desc>Actual synthetic demo output showing compact tools, formatted answers, and command hints. Timings are illustrative.</desc>
-<rect width="940" height="628" rx="16" fill="#101b1d"/>
+<rect width="940" height="651" rx="16" fill="#101b1d"/>
 <path d="M16 0H924Q940 0 940 16V44H0V16Q0 0 16 0" fill="#1d2a2b"/>
 <circle cx="24" cy="23" r="5" fill="#ef8c83"/><circle cx="42" cy="23" r="5" fill="#e6c789"/><circle cx="60" cy="23" r="5" fill="#9ccba5"/>
 <text x="470" y="28" fill="#a2b5ae" text-anchor="middle" font-family="monospace" font-size="12">ty · local agent</text>
@@ -9,7 +9,7 @@
 <text x="42.1" y="72" fill="#8bd5ca" font-weight="700" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">ty</text>
 <text x="60.1" y="72" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  </text>
 <text x="78.2" y="72" fill="#e2e9e6" font-weight="700" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">tiny, at your terminal</text>
-<text x="276.8" y="72" fill="#869c97" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  v0.3.0</text>
+<text x="276.8" y="72" fill="#869c97" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  v0.4.0</text>
 <text x="24.0" y="95" fill="#869c97" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  ────────────────────────────────────────────────────────────────────────────</text>
 <text x="24.0" y="118" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  </text>
 <text x="42.1" y="118" fill="#869c97" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">model       </text>
@@ -57,9 +57,8 @@
 <text x="24.0" y="509" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  Run </text>
 <text x="78.2" y="509" fill="#8bd5ca" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">ty --fast</text>
 <text x="159.4" y="509" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve"> for a quick question.</text>
-<text x="24.0" y="532" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  See </text>
-<text x="78.2" y="532" fill="#8bd5ca" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">Ollama docs</text>
-<text x="177.5" y="532" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">.</text>
+<text x="24.0" y="532" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  See Ollama docs (https://docs.ollama.com/capabilities/tool-calling).</text>
 <text x="24.0" y="578" fill="#869c97" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  12s · 3 steps · 84 tokens  (illustrative demo)</text>
 <text x="24.0" y="601" fill="#869c97" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  /diff review changes · /undo revert · /last tool details</text>
+<text x="24.0" y="624" fill="#869c97" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  While working: Enter steers · Esc replaces · Ctrl-J adds a line</text>
 </svg>

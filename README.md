@@ -52,6 +52,32 @@ ty --demo                     # preview the UI; no model needed
 
 The UI stays in your terminal scrollback; there is no alternate screen. `--show-thinking` exposes the model's thinking preview, which is hidden by default.
 
+## Steer while it works
+
+On Linux/macOS interactive terminals, an input composer remains available during model generation, tool execution, and compaction. It stays beneath the scrolling output and preserves your draft when new output arrives.
+
+| While a task runs | Action |
+| --- | --- |
+| **Enter** | Queue your text as steering for the next tool boundary |
+| **Escape once** | Cancel the current work and run your draft, or the most recently submitted steering |
+| **Ctrl-C** or `/cancel` | Stop the task and keep an unsubmitted draft |
+| **Ctrl-J** or Alt-Enter | Add a line without submitting |
+| **Tab**, arrow keys, Home/End | Complete commands, edit text, and recall history |
+| **Ctrl-U**, **Ctrl-W** | Clear the draft or delete the preceding word |
+| **Ctrl-D** with an empty draft | Stop and exit |
+| `/queue`, `/clear-queue` | Inspect or discard pending steering |
+| `/paste` | Enter multiline paste mode; submit with a line containing `.` |
+
+For example, type `Use Fox News instead` and press Enter to steer at the next boundary. Press Escape afterward to stop the current work and start that request immediately. You can also type a replacement and press Escape directly. Escape with no draft or submitted steering stops the task.
+
+Queued steering invalidates unexecuted calls from the old plan, then the model replans with the new user message. If an answer finishes before another tool call, queued text is still processed. Multiple tool calls in one model response are supported and explicitly encouraged for independent work; they execute in order with individual approvals and steering checks.
+
+Cancellation closes active HTTP sockets, including Ollama streams, and terminates shell process groups and their children. Completed file changes remain. Short local file operations finish at their next cancellation boundary. The shell tool does not take interactive stdin.
+
+Approvals use their own input field. `/steer your text` queues steering while an approval is open; Escape or Ctrl-C can stop it. Without a POSIX terminal, ty keeps the normal sequential REPL.
+
+Compaction shows elapsed time and the running approximate summary-token count, then reports the context estimate before and after. It does not display a percentage because the final summary length is unknown. Cancelling compaction preserves the original history.
+
 ## Tools and permissions
 
 | Tool | Purpose |
@@ -104,7 +130,7 @@ Multiline clipboard pastes stay together on readline terminals with bracketed pa
 
 Search tries DuckDuckGo HTML, then lite, then a Jina Reader fallback. It unwraps redirect URLs, removes duplicate results, and caches successful responses. Provider failures are shown explicitly and are not cached as empty results.
 
-Page reads prefer the article/main content and remove navigation, scripts, forms, duplicated blocks, and obvious boilerplate. An optional `query` selects relevant source passages using a small lexical ranker. If the model omits the query after a search, ty reuses that turn's last search query. Selection keeps source order, includes the source URL, and marks omitted text.
+Page reads prefer the article/main content and remove navigation, scripts, forms, duplicated blocks, and obvious boilerplate. An optional `query` selects relevant source passages using a small lexical ranker. If the model omits the query after a search, ty reuses that turn's last search query. Selection keeps source order, includes the source URL, and marks omitted text. Article links survive HTML cleaning, and relative links are resolved against the page URL. Page activity rows show the actual URL so the selected source is visible.
 
 The cleaned page is cached separately from its excerpts, so another question can select different passages without another download. This uses **no additional inference**. A lexical filter can miss paraphrases; query excerpts are partial evidence, not a guarantee that all relevant text was kept.
 
@@ -137,6 +163,8 @@ On Linux, `num_thread = 0` chooses physical cores; elsewhere it leaves the choic
 | Web and guardian caches | `~/.cache/ty/` |
 
 Legacy `config.json` is still readable; TOML takes precedence. An existing qagent data/config/cache directory migrates on the first normal run if the corresponding ty directory does not exist. Undo backup references migrate with it. Both `AGENTS.md` and `TY.md` project notes are supported, with `QAGENT.md` as a legacy fallback.
+
+The model prompt gives the latest source/topic instructions priority, asks for article-based news summaries with links, and discourages stopping at a list of websites. These instructions help small models but do not guarantee their source selection or reporting accuracy.
 
 ## Small-machine defaults
 

@@ -2,10 +2,13 @@
 
 The first target is **end-to-end task time**, with correctness and successful tool execution held constant. A prettier or shorter serialization is useful only when it improves that result.
 
-## What changed in ty 0.3
+## What changed in ty 0.3 and 0.4
 
 | Change | Why it helps | Tradeoff |
 | --- | --- | --- |
+| Batched native tool calls | Several independent actions can use one model response | Execution remains ordered for approval and steering |
+| Live steering and cancellation | Stops unwanted work instead of waiting through another model generation | Completed mutations are preserved |
+| Streamed compaction progress | Shows work and cancellation while context is summarized | Token counts are approximate; no progress percentage |
 | Stable date/environment prefix within a session | Stops the clock from changing the prompt every model step | Does not guarantee prefix-cache reuse for hybrid models |
 | `code` and `web` tool sets | Reduces schema overhead for focused tasks | Only those tools are available |
 | Thinking off by default; 768 generated tokens per step | Limits long generations | Longer implementations need a larger output cap |
@@ -16,7 +19,7 @@ The first target is **end-to-end task time**, with correctness and successful to
 | Estimated budgets include tool schemas | Makes context reports and compaction thresholds more useful | Character estimates still differ from the real tokenizer |
 | Physical-core thread selection on Linux | Provides a conservative CPU baseline | Benchmark overrides for the machine and workload |
 
-With an empty conversation, a `/workspace` directory, no project notes, and the default model, current approximate overhead is:
+With an empty conversation, a `/workspace` directory, no project notes, and the default model, approximate overhead at v0.3 was:
 
 | Tool set | Tools | Estimated tokens |
 | --- | --- | --- |
