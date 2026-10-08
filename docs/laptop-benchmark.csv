@@ -1,0 +1,5 @@
+model,threads,run,prompt_tokens,output_tokens,prefill_tok_s,decode_tok_s,total_s,load_s
+qwen3.5:2b,2,1,30,32,13.18,7.23,12.58,5.88
+qwen3.5:2b,2,2,30,32,83.52,7.23,4.81,0.0
+qwen3.5:2b,4,1,30,32,13.19,7.27,12.52,5.84
+qwen3.5:2b,4,2,30,32,67.05,7.43,4.8,0.01

@@ -1,0 +1,17 @@
+# Copy to ~/.config/ty/config.toml. CLI flags override these defaults.
+model = "qwen3.5:2b"
+mode = "smart"
+ctx = 4096
+think = false
+caveman = "off"
+show_thinking = false
+ui = "calm"
+hints = true
+num_thread = 0           # physical cores on Linux; Ollama default elsewhere
+max_tokens = 768         # generated tokens per model step
+max_out = 1200           # characters per tool result
+keep_alive = "10m"
+tools = "core"           # core | code | web | all
+compact_at = 0.72
+web_cache_ttl = 86400
+web_results = 4

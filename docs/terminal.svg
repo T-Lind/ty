@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="628" viewBox="0 0 940 628" role="img" aria-label="ty terminal interface, illustrative demo">
+<title>ty — tiny, at your terminal</title>
+<desc>Actual synthetic demo output showing compact tools, formatted answers, and command hints. Timings are illustrative.</desc>
+<rect width="940" height="628" rx="16" fill="#101b1d"/>
+<path d="M16 0H924Q940 0 940 16V44H0V16Q0 0 16 0" fill="#1d2a2b"/>
+<circle cx="24" cy="23" r="5" fill="#ef8c83"/><circle cx="42" cy="23" r="5" fill="#e6c789"/><circle cx="60" cy="23" r="5" fill="#9ccba5"/>
+<text x="470" y="28" fill="#a2b5ae" text-anchor="middle" font-family="monospace" font-size="12">ty · local agent</text>
+<text x="24.0" y="72" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  </text>
+<text x="42.1" y="72" fill="#8bd5ca" font-weight="700" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">ty</text>
+<text x="60.1" y="72" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  </text>
+<text x="78.2" y="72" fill="#e2e9e6" font-weight="700" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">tiny, at your terminal</text>
+<text x="276.8" y="72" fill="#869c97" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  v0.3.0</text>
+<text x="24.0" y="95" fill="#869c97" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  ────────────────────────────────────────────────────────────────────────────</text>
+<text x="24.0" y="118" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  </text>
+<text x="42.1" y="118" fill="#869c97" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">model       </text>
+<text x="150.4" y="118" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve"> qwen3.5:2b  ·  smart approvals  ·  reasoning off</text>
+<text x="24.0" y="141" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  </text>
+<text x="42.1" y="141" fill="#869c97" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">workspace   </text>
+<text x="150.4" y="141" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve"> /projects/ty</text>
+<text x="24.0" y="187" fill="#869c97" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  Ask a question, inspect a project, or make a small change.</text>
+<text x="24.0" y="210" fill="#869c97" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  /help commands · Tab complete · /paste multiline · Ctrl-D exit</text>
+<text x="24.0" y="256" fill="#8bd5ca" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  ty</text>
+<text x="60.1" y="256" fill="#869c97" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve"> smart</text>
+<text x="114.3" y="256" fill="#8bd5ca" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve"> › </text>
+<text x="141.4" y="256" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">find the install instructions and make them shorter</text>
+<text x="24.0" y="279" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  </text>
+<text x="42.1" y="279" fill="#a2d7ac" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">✓</text>
+<text x="51.1" y="279" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve"> </text>
+<text x="60.1" y="279" fill="#8bd5ca" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">read   </text>
+<text x="123.3" y="279" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve"> README.md </text>
+<text x="222.7" y="279" fill="#869c97" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">0.1s</text>
+<text x="24.0" y="302" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  </text>
+<text x="42.1" y="302" fill="#a2d7ac" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">✓</text>
+<text x="51.1" y="302" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve"> </text>
+<text x="60.1" y="302" fill="#8bd5ca" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">search </text>
+<text x="123.3" y="302" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve"> Ollama tool calling documentation </text>
+<text x="439.4" y="302" fill="#869c97" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">0.8s</text>
+<text x="24.0" y="325" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  </text>
+<text x="42.1" y="325" fill="#a2d7ac" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">✓</text>
+<text x="51.1" y="325" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve"> </text>
+<text x="60.1" y="325" fill="#8bd5ca" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">edit   </text>
+<text x="123.3" y="325" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve"> README.md </text>
+<text x="222.7" y="325" fill="#869c97" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">0.1s</text>
+<text x="24.0" y="371" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  </text>
+<text x="42.1" y="371" fill="#e2e9e6" font-weight="700" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">ty</text>
+<text x="24.0" y="394" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  </text>
+<text x="42.1" y="394" fill="#e2e9e6" font-weight="700" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">Ready.</text>
+<text x="96.2" y="394" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve"> The install instructions now fit in three steps.</text>
+<text x="24.0" y="417" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  </text>
+<text x="24.0" y="440" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  </text>
+<text x="42.1" y="440" fill="#8bd5ca" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">• </text>
+<text x="60.1" y="440" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">Added a copyable quick start.</text>
+<text x="24.0" y="463" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  </text>
+<text x="42.1" y="463" fill="#8bd5ca" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">• </text>
+<text x="60.1" y="463" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">Kept the model choice and permissions clear.</text>
+<text x="24.0" y="486" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  </text>
+<text x="24.0" y="509" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  Run </text>
+<text x="78.2" y="509" fill="#8bd5ca" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">ty --fast</text>
+<text x="159.4" y="509" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve"> for a quick question.</text>
+<text x="24.0" y="532" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  See </text>
+<text x="78.2" y="532" fill="#8bd5ca" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">Ollama docs</text>
+<text x="177.5" y="532" fill="#e2e9e6" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">.</text>
+<text x="24.0" y="578" fill="#869c97" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  12s · 3 steps · 84 tokens  (illustrative demo)</text>
+<text x="24.0" y="601" fill="#869c97" font-weight="400" font-family="DejaVu Sans Mono, monospace" font-size="15" xml:space="preserve">  /diff review changes · /undo revert · /last tool details</text>
+</svg>

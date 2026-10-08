@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ty-local-agent"
+version = "0.3.0"
+description = "Tiny, at your terminal. A quiet local agent powered by Ollama."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {file = "LICENSE"}
+authors = [{name = "ty contributors"}]
+dependencies = []
+
+[project.scripts]
+ty = "ty:main"
+
+[tool.setuptools]
+py-modules = ["ty"]
